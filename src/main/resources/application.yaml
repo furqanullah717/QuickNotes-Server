@@ -1,0 +1,12 @@
+ktor:
+  deployment:
+    port: 8080
+    host: 0.0.0.0
+  application:
+    modules:
+      - com.codewithfk.ApplicationKt.module
+
+logging:
+  level:
+    root: INFO
+    com.codewithfk: DEBUG
