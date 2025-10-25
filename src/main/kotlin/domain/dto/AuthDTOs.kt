@@ -41,7 +41,8 @@ data class LogoutRequest(
 data class AuthResponse(
     val userId: String,
     val accessToken: String,
-    val refreshToken: String
+    val refreshToken: String,
+    val email:String?
 )
 
 @Serializable

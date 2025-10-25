@@ -47,7 +47,8 @@ fun Route.authRoutes() {
                 call.respond(HttpStatusCode.Created, AuthResponse(
                     userId = user.id.value.toString(),
                     accessToken = accessToken,
-                    refreshToken = refreshToken
+                    refreshToken = refreshToken,
+                    email = user.email
                 ))
             } catch (e: IllegalArgumentException) {
                 val problem = ProblemFactory.conflict(e.message ?: "User already exists")
@@ -66,7 +67,8 @@ fun Route.authRoutes() {
                 call.respond(AuthResponse(
                     userId = user.id.value.toString(),
                     accessToken = accessToken,
-                    refreshToken = refreshToken
+                    refreshToken = refreshToken,
+                    email = user.email
                 ))
             } catch (e: IllegalArgumentException) {
                 val problem = ProblemFactory.unauthorized("Invalid email or password")

@@ -116,7 +116,8 @@ Response:
 {
   "userId": "uuid",
   "accessToken": "jwt-token",
-  "refreshToken": "refresh-token"
+  "refreshToken": "refresh-token",
+  "email": "email"
 }
 ```
 
