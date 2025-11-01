@@ -2,6 +2,7 @@ package com.codewithfk.services
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
+import com.codewithfk.config.Security
 import com.codewithfk.domain.models.RefreshToken
 import com.codewithfk.domain.models.RefreshTokens
 import com.codewithfk.domain.models.User
@@ -27,6 +28,8 @@ class TokenService(
         
         return JWT.create()
             .withSubject(userId.toString())
+            .withIssuer(Security.ISSUER)
+            .withAudience(Security.AUDIENCE)
             .withIssuedAt(Date.from(now))
             .withExpiresAt(Date.from(now.plusSeconds(accessTokenTtlMinutes * 60L)))
             .sign(algorithm)
