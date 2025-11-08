@@ -3,6 +3,7 @@ plugins {
     kotlin("plugin.serialization") version "1.9.21"
     id("io.ktor.plugin") version "2.3.7"
     id("org.flywaydb.flyway") version "9.22.3"
+    id("com.github.johnrengelman.shadow") version "8.1.1"
 }
 
 group = "com.codewithfk"
@@ -72,4 +73,24 @@ flyway {
 }
 kotlin {
     jvmToolchain(21)
+}
+
+// Configure shadow JAR for Heroku deployment
+tasks.shadowJar {
+    archiveBaseName.set("quickernotes-server")
+    archiveClassifier.set("")
+    archiveVersion.set("")
+    manifest {
+        attributes(mapOf("Main-Class" to "com.codewithfk.ApplicationKt"))
+    }
+}
+
+// Heroku stage task - builds the application
+tasks.register("stage") {
+    dependsOn("shadowJar")
+    description = "Build the application for Heroku deployment"
+    doLast {
+        println("Application built successfully for Heroku deployment")
+        println("JAR location: build/libs/quickernotes-server.jar")
+    }
 }
