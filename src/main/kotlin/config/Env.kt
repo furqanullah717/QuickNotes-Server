@@ -144,7 +144,9 @@ object Env {
     val DB_PASSWORD = databaseConfig.password
     
     val JWT_SECRET = getEnv("JWT_SECRET", "default-secret-change-in-production")
-    val ACCESS_TOKEN_TTL_MIN = getEnvInt("ACCESS_TOKEN_TTL_MIN", 2592000)
+    // Access token expires in 15 minutes (short-lived for security)
+    val ACCESS_TOKEN_TTL_MIN = getEnvInt("ACCESS_TOKEN_TTL_MIN", 15)
+    // Refresh token expires in 30 days (long-lived for user convenience)
     val REFRESH_TOKEN_TTL_DAYS = getEnvInt("REFRESH_TOKEN_TTL_DAYS", 30)
     
     val SMTP_HOST = getEnv("SMTP_HOST", "localhost")
