@@ -44,12 +44,18 @@ object Env {
     
     private fun parseHerokuDatabaseUrl(url: String): DatabaseConfig? {
         return try {
+            println("Parsing Heroku DATABASE_URL format...")
             // Heroku format: postgres://user:password@host:port/database
             // or: postgresql://user:password@host:port/database
             // Note: Passwords with special characters are URL-encoded by Heroku
             val uri = URI(url)
             val scheme = uri.scheme
-            val userInfo = uri.userInfo?.split(":", limit = 2) ?: return null
+            println("Database scheme: $scheme")
+            
+            val userInfo = uri.userInfo?.split(":", limit = 2) ?: run {
+                println("WARNING: No user info in DATABASE_URL")
+                return null
+            }
             val username = URLDecoder.decode(userInfo[0], StandardCharsets.UTF_8.name())
             val password = URLDecoder.decode(userInfo.getOrNull(1) ?: "", StandardCharsets.UTF_8.name())
             val host = uri.host
@@ -59,6 +65,8 @@ object Env {
                 else -> 5432
             }
             val database = uri.path.removePrefix("/")
+            
+            println("Parsed database config: host=$host, port=$port, database=$database, user=$username")
             
             val dbType = when (scheme) {
                 "postgres", "postgresql" -> "postgresql"
@@ -71,36 +79,44 @@ object Env {
                 else -> "jdbc:postgresql://$host:$port/$database"
             }
             
+            println("Successfully parsed Heroku DATABASE_URL")
             DatabaseConfig(jdbcUrl, username, password, dbType)
         } catch (e: Exception) {
+            println("ERROR parsing Heroku DATABASE_URL: ${e.message}")
+            e.printStackTrace()
             null
         }
     }
     
     private val databaseConfig: DatabaseConfig by lazy {
         val herokuUrl = System.getenv("DATABASE_URL") ?: properties.getProperty("DATABASE_URL")
+        println("DATABASE_URL from environment: ${herokuUrl?.take(50)}...")
         
         if (herokuUrl != null && !herokuUrl.startsWith("jdbc:")) {
             // Try to parse as Heroku format
-            parseHerokuDatabaseUrl(herokuUrl) ?: run {
-                // Fall back to individual env vars
-                val dbType = getEnv("DATABASE_TYPE", "postgresql")
-                DatabaseConfig(
-                    jdbcUrl = getEnv("DATABASE_URL", when (dbType.lowercase()) {
-                        "mysql" -> "jdbc:mysql://localhost:3306/quickernotes?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true"
-                        else -> "jdbc:postgresql://localhost:5432/quickernotes"
-                    }),
-                    username = getEnv("DB_USER", when (dbType.lowercase()) {
-                        "mysql" -> "root"
-                        else -> "postgres"
-                    }),
-                    password = getEnv("DB_PASSWORD", when (dbType.lowercase()) {
-                        "mysql" -> "root1234"
-                        else -> "root1234"
-                    }),
-                    type = dbType
-                )
+            val parsed = parseHerokuDatabaseUrl(herokuUrl)
+            if (parsed != null) {
+                return@lazy parsed
             }
+            
+            println("WARNING: Failed to parse Heroku DATABASE_URL, falling back to individual env vars")
+            // Fall back to individual env vars
+            val dbType = getEnv("DATABASE_TYPE", "postgresql")
+            DatabaseConfig(
+                jdbcUrl = getEnv("DATABASE_URL", when (dbType.lowercase()) {
+                    "mysql" -> "jdbc:mysql://localhost:3306/quickernotes?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true"
+                    else -> "jdbc:postgresql://localhost:5432/quickernotes"
+                }),
+                username = getEnv("DB_USER", when (dbType.lowercase()) {
+                    "mysql" -> "root"
+                    else -> "postgres"
+                }),
+                password = getEnv("DB_PASSWORD", when (dbType.lowercase()) {
+                    "mysql" -> "root1234"
+                    else -> "root1234"
+                }),
+                type = dbType
+            )
         } else {
             // Already in JDBC format or using individual env vars
             val dbType = getEnv("DATABASE_TYPE", "postgresql")

@@ -11,50 +11,71 @@ object DatabaseConfig {
     private var dataSource: HikariDataSource? = null
     
     fun init(databaseUrl: String, username: String, password: String, databaseType: String = "postgresql") {
-        val config = HikariConfig().apply {
-            jdbcUrl = databaseUrl
-            this.username = username
-            this.password = password
-            
-            driverClassName = when (databaseType.lowercase()) {
-                "mysql" -> "com.mysql.cj.jdbc.Driver"
-                else -> "org.postgresql.Driver"
+        try {
+            println("Creating HikariCP configuration...")
+            val config = HikariConfig().apply {
+                jdbcUrl = databaseUrl
+                this.username = username
+                this.password = password
+                
+                driverClassName = when (databaseType.lowercase()) {
+                    "mysql" -> "com.mysql.cj.jdbc.Driver"
+                    else -> "org.postgresql.Driver"
+                }
+                
+                maximumPoolSize = 10
+                minimumIdle = 2
+                connectionTimeout = 30000
+                idleTimeout = 600000
+                maxLifetime = 1800000
+                
+                if (databaseType.lowercase() == "mysql") {
+                    addDataSourceProperty("cachePrepStmts", "true")
+                    addDataSourceProperty("prepStmtCacheSize", "250")
+                    addDataSourceProperty("prepStmtCacheSqlLimit", "2048")
+                    addDataSourceProperty("useServerPrepStmts", "true")
+                    addDataSourceProperty("useLocalSessionState", "true")
+                    addDataSourceProperty("rewriteBatchedStatements", "true")
+                    addDataSourceProperty("cacheResultSetMetadata", "true")
+                    addDataSourceProperty("cacheServerConfiguration", "true")
+                    addDataSourceProperty("elideSetAutoCommits", "true")
+                    addDataSourceProperty("maintainTimeStats", "false")
+                    addDataSourceProperty("allowPublicKeyRetrieval", "true")
+                    addDataSourceProperty("useSSL", "false")
+                    addDataSourceProperty("serverTimezone", "UTC")
+                }
             }
             
-            maximumPoolSize = 10
-            minimumIdle = 2
-            connectionTimeout = 30000
-            idleTimeout = 600000
-            maxLifetime = 1800000
+            println("Creating HikariCP data source...")
+            dataSource = HikariDataSource(config)
             
-            if (databaseType.lowercase() == "mysql") {
-                addDataSourceProperty("cachePrepStmts", "true")
-                addDataSourceProperty("prepStmtCacheSize", "250")
-                addDataSourceProperty("prepStmtCacheSqlLimit", "2048")
-                addDataSourceProperty("useServerPrepStmts", "true")
-                addDataSourceProperty("useLocalSessionState", "true")
-                addDataSourceProperty("rewriteBatchedStatements", "true")
-                addDataSourceProperty("cacheResultSetMetadata", "true")
-                addDataSourceProperty("cacheServerConfiguration", "true")
-                addDataSourceProperty("elideSetAutoCommits", "true")
-                addDataSourceProperty("maintainTimeStats", "false")
-                addDataSourceProperty("allowPublicKeyRetrieval", "true")
-                addDataSourceProperty("useSSL", "false")
-                addDataSourceProperty("serverTimezone", "UTC")
+            println("Connecting to database...")
+            Database.connect(dataSource!!)
+            println("Database connection established")
+            
+            println("Creating/updating database schema...")
+            transaction {
+                try {
+                    SchemaUtils.createMissingTablesAndColumns(
+                        Users,
+                        Notes,
+                        RefreshTokens,
+                        PasswordResets,
+                        AccountDeletions
+                    )
+                    println("Database schema updated successfully")
+                } catch (e: Exception) {
+                    println("ERROR creating schema: ${e.message}")
+                    e.printStackTrace()
+                    throw e
+                }
             }
-        }
-        
-        dataSource = HikariDataSource(config)
-        Database.connect(dataSource!!)
-        
-        transaction {
-            SchemaUtils.createMissingTablesAndColumns(
-                Users,
-                Notes,
-                RefreshTokens,
-                PasswordResets,
-                AccountDeletions
-            )
+        } catch (e: Exception) {
+            println("ERROR in DatabaseConfig.init: ${e.message}")
+            println("Database URL: ${databaseUrl.take(100)}...")
+            println("Database Type: $databaseType")
+            e.printStackTrace()
+            throw RuntimeException("Failed to initialize database: ${e.message}", e)
         }
     }
     
