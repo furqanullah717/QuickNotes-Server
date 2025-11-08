@@ -1,7 +1,17 @@
 package com.codewithfk.config
 
 import java.io.File
+import java.net.URI
+import java.net.URLDecoder
+import java.nio.charset.StandardCharsets
 import java.util.*
+
+data class DatabaseConfig(
+    val jdbcUrl: String,
+    val username: String,
+    val password: String,
+    val type: String
+)
 
 object Env {
     private val properties = loadEnvFile()
@@ -32,19 +42,90 @@ object Env {
         return value?.toIntOrNull() ?: defaultValue
     }
     
-    val DATABASE_TYPE = getEnv("DATABASE_TYPE", "mysql") // postgresql or mysql
-    val DATABASE_URL: String = getEnv("DATABASE_URL", when (DATABASE_TYPE.lowercase()) {
-        "mysql" -> "jdbc:mysql://localhost:3306/quickernotes?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true"
-        else -> "jdbc:postgresql://localhost:5432/quickernotes"
-    })
-    val DB_USER = getEnv("DB_USER", when (DATABASE_TYPE.lowercase()) {
-        "mysql" -> "root"
-        else -> "postgres"
-    })
-    val DB_PASSWORD = getEnv("DB_PASSWORD", when (DATABASE_TYPE.lowercase()) {
-        "mysql" -> "root1234"
-        else -> "root1234"
-    })
+    private fun parseHerokuDatabaseUrl(url: String): DatabaseConfig? {
+        return try {
+            // Heroku format: postgres://user:password@host:port/database
+            // or: postgresql://user:password@host:port/database
+            // Note: Passwords with special characters are URL-encoded by Heroku
+            val uri = URI(url)
+            val scheme = uri.scheme
+            val userInfo = uri.userInfo?.split(":", limit = 2) ?: return null
+            val username = URLDecoder.decode(userInfo[0], StandardCharsets.UTF_8.name())
+            val password = URLDecoder.decode(userInfo.getOrNull(1) ?: "", StandardCharsets.UTF_8.name())
+            val host = uri.host
+            val port = if (uri.port != -1) uri.port else when (scheme) {
+                "postgres", "postgresql" -> 5432
+                "mysql" -> 3306
+                else -> 5432
+            }
+            val database = uri.path.removePrefix("/")
+            
+            val dbType = when (scheme) {
+                "postgres", "postgresql" -> "postgresql"
+                "mysql" -> "mysql"
+                else -> "postgresql"
+            }
+            
+            val jdbcUrl = when (dbType) {
+                "mysql" -> "jdbc:mysql://$host:$port/$database?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true"
+                else -> "jdbc:postgresql://$host:$port/$database"
+            }
+            
+            DatabaseConfig(jdbcUrl, username, password, dbType)
+        } catch (e: Exception) {
+            null
+        }
+    }
+    
+    private val databaseConfig: DatabaseConfig by lazy {
+        val herokuUrl = System.getenv("DATABASE_URL") ?: properties.getProperty("DATABASE_URL")
+        
+        if (herokuUrl != null && !herokuUrl.startsWith("jdbc:")) {
+            // Try to parse as Heroku format
+            parseHerokuDatabaseUrl(herokuUrl) ?: run {
+                // Fall back to individual env vars
+                val dbType = getEnv("DATABASE_TYPE", "postgresql")
+                DatabaseConfig(
+                    jdbcUrl = getEnv("DATABASE_URL", when (dbType.lowercase()) {
+                        "mysql" -> "jdbc:mysql://localhost:3306/quickernotes?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true"
+                        else -> "jdbc:postgresql://localhost:5432/quickernotes"
+                    }),
+                    username = getEnv("DB_USER", when (dbType.lowercase()) {
+                        "mysql" -> "root"
+                        else -> "postgres"
+                    }),
+                    password = getEnv("DB_PASSWORD", when (dbType.lowercase()) {
+                        "mysql" -> "root1234"
+                        else -> "root1234"
+                    }),
+                    type = dbType
+                )
+            }
+        } else {
+            // Already in JDBC format or using individual env vars
+            val dbType = getEnv("DATABASE_TYPE", "postgresql")
+            DatabaseConfig(
+                jdbcUrl = getEnv("DATABASE_URL", when (dbType.lowercase()) {
+                    "mysql" -> "jdbc:mysql://localhost:3306/quickernotes?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true"
+                    else -> "jdbc:postgresql://localhost:5432/quickernotes"
+                }),
+                username = getEnv("DB_USER", when (dbType.lowercase()) {
+                    "mysql" -> "root"
+                    else -> "postgres"
+                }),
+                password = getEnv("DB_PASSWORD", when (dbType.lowercase()) {
+                    "mysql" -> "root1234"
+                    else -> "root1234"
+                }),
+                type = dbType
+            )
+        }
+    }
+    
+    val DATABASE_TYPE = databaseConfig.type
+    val DATABASE_URL = databaseConfig.jdbcUrl
+    val DB_USER = databaseConfig.username
+    val DB_PASSWORD = databaseConfig.password
     
     val JWT_SECRET = getEnv("JWT_SECRET", "default-secret-change-in-production")
     val ACCESS_TOKEN_TTL_MIN = getEnvInt("ACCESS_TOKEN_TTL_MIN", 2592000)

@@ -39,3 +39,4 @@ fun Application.configureStatusPages() {
         }
     }
 }
+

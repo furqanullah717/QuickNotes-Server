@@ -34,3 +34,4 @@ object Hashing {
         return BCrypt.checkpw(token, hash)
     }
 }
+

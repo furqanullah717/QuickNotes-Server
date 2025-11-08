@@ -14,3 +14,4 @@ fun Application.configureSerialization() {
         })
     }
 }
+
