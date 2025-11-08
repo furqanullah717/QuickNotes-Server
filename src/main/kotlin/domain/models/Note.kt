@@ -14,6 +14,11 @@ object Notes : UUIDTable("notes") {
     val body = text("body")
     val isDeleted = bool("is_deleted")
     val updatedAt = timestamp("updated_at")
+    val isPinned = bool("is_pinned").default(false)
+    // Note: TEXT columns can't have defaults in MySQL, so we make them nullable and handle nulls as empty strings in code
+    val tags = text("tags").nullable()
+    val checklist = text("checklist").nullable()
+    val colorTag = text("color_tag").nullable()
 }
 
 class Note(id: EntityID<UUID>) : UUIDEntity(id) {
@@ -24,4 +29,8 @@ class Note(id: EntityID<UUID>) : UUIDEntity(id) {
     var body by Notes.body
     var isDeleted by Notes.isDeleted
     var updatedAt by Notes.updatedAt
+    var isPinned by Notes.isPinned
+    var tags by Notes.tags
+    var checklist by Notes.checklist
+    var colorTag by Notes.colorTag
 }
