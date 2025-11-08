@@ -1,5 +1,6 @@
 package com.codewithfk
 
+import com.codewithfk.routes.accountDeletionRoutes
 import com.codewithfk.routes.authRoutes
 import com.codewithfk.routes.syncRoutes
 import io.ktor.server.application.*
@@ -11,6 +12,7 @@ fun Application.configureRouting() {
 
         authRoutes()
         syncRoutes()
+        accountDeletionRoutes()
 
         get("/") {
             call.respondText("Hello World!")

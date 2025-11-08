@@ -62,3 +62,17 @@ data class UserProfile(
 data class OkResponse(
     val ok: Boolean = true
 )
+
+@Serializable
+data class AccountDeletionRequest(
+    val email: String,
+    val password: String
+)
+
+@Serializable
+data class AccountDeletionStatusResponse(
+    val requested: Boolean,
+    val requestedAt: String? = null,
+    val scheduledDeletionAt: String? = null,
+    val daysRemaining: Int? = null
+)

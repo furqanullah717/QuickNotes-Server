@@ -52,7 +52,8 @@ object DatabaseConfig {
                 Users,
                 Notes,
                 RefreshTokens,
-                PasswordResets
+                PasswordResets,
+                AccountDeletions
             )
         }
     }
