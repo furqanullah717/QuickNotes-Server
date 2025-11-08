@@ -80,6 +80,7 @@ tasks.shadowJar {
     archiveBaseName.set("quickernotes-server")
     archiveClassifier.set("")
     archiveVersion.set("")
+    archiveFileName.set("quickernotes-server.jar")
     manifest {
         attributes(mapOf("Main-Class" to "com.codewithfk.ApplicationKt"))
     }
@@ -90,7 +91,13 @@ tasks.register("stage") {
     dependsOn("shadowJar")
     description = "Build the application for Heroku deployment"
     doLast {
-        println("Application built successfully for Heroku deployment")
-        println("JAR location: build/libs/quickernotes-server.jar")
+        val jarFile = file("build/libs/quickernotes-server.jar")
+        if (jarFile.exists()) {
+            println("✓ Application built successfully for Heroku deployment")
+            println("✓ JAR location: ${jarFile.absolutePath}")
+            println("✓ JAR size: ${jarFile.length() / 1024 / 1024} MB")
+        } else {
+            throw GradleException("JAR file not found at build/libs/quickernotes-server.jar")
+        }
     }
 }
