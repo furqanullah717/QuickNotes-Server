@@ -1,10 +1,13 @@
 package com.codewithfk.services
 
 import com.codewithfk.domain.dto.NoteChangeV2
+import com.codewithfk.domain.dto.ReminderChangeV2
 import com.codewithfk.domain.dto.SyncRequestV2
 import com.codewithfk.domain.dto.SyncResponseV2
 import com.codewithfk.domain.models.Note
 import com.codewithfk.domain.models.Notes
+import com.codewithfk.domain.models.Reminder
+import com.codewithfk.domain.models.Reminders
 import com.codewithfk.domain.models.Users
 import com.codewithfk.util.Time
 import org.jetbrains.exposed.dao.id.EntityID
@@ -23,6 +26,8 @@ class SyncServiceV2 {
         return transaction {
             val applied = mutableListOf<String>()
             val conflicts = mutableListOf<NoteChangeV2>()
+            val appliedReminders = mutableListOf<String>()
+            val conflictsReminders = mutableListOf<ReminderChangeV2>()
             
             // Process client changes
             for (clientChange in request.changes) {
@@ -82,6 +87,74 @@ class SyncServiceV2 {
                 }
             }
             
+            // Process client reminder changes
+            for (clientReminderChange in request.reminderChanges) {
+                val reminderId = UUID.fromString(clientReminderChange.id)
+                val noteId = UUID.fromString(clientReminderChange.noteId)
+                val clientUpdatedAt = clientReminderChange.updatedAtEpochMillis
+                
+                // Verify note exists and belongs to user
+                val note = Note.findById(noteId)
+                if (note == null || note.userId.value != userId) {
+                    continue // Skip reminders for notes that don't exist or don't belong to user
+                }
+                
+                val existingReminder = Reminder.findById(reminderId)
+                
+                if (existingReminder == null) {
+                    // Create new reminder
+                    Reminder.new(reminderId) {
+                        this.userId = EntityID(userId, Users)
+                        this.noteId = EntityID(noteId, Notes)
+                        this.title = clientReminderChange.title
+                        this.body = clientReminderChange.body
+                        this.scheduledAtEpochMillis = clientReminderChange.scheduledAtEpochMillis
+                        this.repeatType = clientReminderChange.repeatType
+                        this.isEnabled = clientReminderChange.isEnabled
+                        this.isDeleted = clientReminderChange.isDeleted
+                        this.createdAtEpochMillis = clientReminderChange.createdAtEpochMillis
+                        this.updatedAtEpochMillis = clientReminderChange.updatedAtEpochMillis
+                        this.updatedAt = now
+                    }
+                    appliedReminders.add(clientReminderChange.id)
+                } else {
+                    // Check if reminder belongs to user
+                    if (existingReminder.userId.value != userId) {
+                        continue // Skip reminders that don't belong to this user
+                    }
+                    
+                    // Check for conflict (server version is newer)
+                    if (existingReminder.updatedAtEpochMillis > clientUpdatedAt) {
+                        // Server version wins - add to conflicts
+                        conflictsReminders.add(
+                            ReminderChangeV2(
+                                id = existingReminder.id.value.toString(),
+                                noteId = existingReminder.noteId.value.toString(),
+                                title = existingReminder.title,
+                                body = existingReminder.body,
+                                scheduledAtEpochMillis = existingReminder.scheduledAtEpochMillis,
+                                repeatType = existingReminder.repeatType,
+                                isEnabled = existingReminder.isEnabled,
+                                createdAtEpochMillis = existingReminder.createdAtEpochMillis,
+                                updatedAtEpochMillis = existingReminder.updatedAtEpochMillis,
+                                isDeleted = existingReminder.isDeleted
+                            )
+                        )
+                    } else {
+                        // Client version is newer or equal - update reminder
+                        existingReminder.title = clientReminderChange.title
+                        existingReminder.body = clientReminderChange.body
+                        existingReminder.scheduledAtEpochMillis = clientReminderChange.scheduledAtEpochMillis
+                        existingReminder.repeatType = clientReminderChange.repeatType
+                        existingReminder.isEnabled = clientReminderChange.isEnabled
+                        existingReminder.isDeleted = clientReminderChange.isDeleted
+                        existingReminder.updatedAtEpochMillis = clientReminderChange.updatedAtEpochMillis
+                        existingReminder.updatedAt = now
+                        appliedReminders.add(clientReminderChange.id)
+                    }
+                }
+            }
+            
             // Get server changes since last sync
             val serverChanges = if (since != null) {
                 Note.find { 
@@ -126,12 +199,61 @@ class SyncServiceV2 {
                     }
             }
             
+            // Get server reminder changes since last sync
+            val serverReminderChanges = if (since != null) {
+                Reminder.find {
+                    (Reminders.userId eq userId) and
+                    (Reminders.updatedAt greater since) and
+                    (Reminders.isDeleted eq false)
+                }.orderBy(Reminders.updatedAt to SortOrder.ASC)
+                    .limit(1000)
+                    .map { reminder ->
+                        ReminderChangeV2(
+                            id = reminder.id.value.toString(),
+                            noteId = reminder.noteId.value.toString(),
+                            title = reminder.title,
+                            body = reminder.body,
+                            scheduledAtEpochMillis = reminder.scheduledAtEpochMillis,
+                            repeatType = reminder.repeatType,
+                            isEnabled = reminder.isEnabled,
+                            createdAtEpochMillis = reminder.createdAtEpochMillis,
+                            updatedAtEpochMillis = reminder.updatedAtEpochMillis,
+                            isDeleted = reminder.isDeleted
+                        )
+                    }
+            } else {
+                // First sync - return all non-deleted reminders
+                Reminder.find {
+                    (Reminders.userId eq userId) and
+                    (Reminders.isDeleted eq false)
+                }
+                    .orderBy(Reminders.updatedAt to SortOrder.ASC)
+                    .limit(1000)
+                    .map { reminder ->
+                        ReminderChangeV2(
+                            id = reminder.id.value.toString(),
+                            noteId = reminder.noteId.value.toString(),
+                            title = reminder.title,
+                            body = reminder.body,
+                            scheduledAtEpochMillis = reminder.scheduledAtEpochMillis,
+                            repeatType = reminder.repeatType,
+                            isEnabled = reminder.isEnabled,
+                            createdAtEpochMillis = reminder.createdAtEpochMillis,
+                            updatedAtEpochMillis = reminder.updatedAtEpochMillis,
+                            isDeleted = reminder.isDeleted
+                        )
+                    }
+            }
+            
             SyncResponseV2(
                 now = Time.format(now),
                 applied = applied,
                 conflicts = conflicts,
                 changes = serverChanges,
-                nextSince = Time.format(now)
+                nextSince = Time.format(now),
+                appliedReminders = appliedReminders,
+                conflictsReminders = conflictsReminders,
+                reminderChanges = serverReminderChanges
             )
         }
     }
