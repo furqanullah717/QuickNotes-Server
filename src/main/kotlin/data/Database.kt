@@ -59,6 +59,7 @@ object DatabaseConfig {
                     SchemaUtils.createMissingTablesAndColumns(
                         Users,
                         Notes,
+                        Reminders,
                         RefreshTokens,
                         PasswordResets,
                         AccountDeletions
